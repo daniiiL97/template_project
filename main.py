@@ -3,8 +3,13 @@ from botocore.client import Config
 import pandas as pd
 from io import BytesIO
 vk_cloud_endpoint = 'https://hb.bizmrg.com'
-access_key = key1
-secret_key = key2
+
+with open("keys/secret_keys.txt", "r") as f:
+   keys = f.readlines()
+
+
+access_key = keys[0].split('=')[1].strip()
+secret_key = keys[1].split('=')[1].strip()
 
 s3 = boto3.client(
     's3',
