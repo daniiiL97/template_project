@@ -8,6 +8,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 import ast
 import textwrap
+import pyperclip
 
 
 with open("keys/password.txt", "r") as f:
@@ -62,6 +63,11 @@ def find_relevant_templates(input_text, embeddings, df, top_n):
     return top_templates, top_scores
 
 
+def copy_to_clipboard(text):
+    pyperclip.copy(text)
+    st.success("Шаблон скопирован в буфер обмена!")
+
+
 if "password_entered" not in st.session_state:
     st.session_state["password_entered"] = False
 
@@ -83,12 +89,16 @@ if st.session_state["password_entered"]:
 
     input_phrase = st.text_input("Введите текст для поиска релевантных шаблонов:", "участники СВО")
 
+    top_n = st.slider("Выберите количество шаблонов:", min_value=1, max_value=11, step=1)
+
     if st.button("Найти шаблоны"):
-        relevant_templates, scores = find_relevant_templates(input_phrase, embeddings, df, 3)
+        relevant_templates, scores = find_relevant_templates(input_phrase, embeddings, df, top_n)
 
         st.write("Релевантные шаблоны:")
-        for template, score in zip(relevant_templates, scores):
+        for i, (template, score) in enumerate(zip(relevant_templates, scores)):
             wrapped_template = textwrap.fill(template, width=100)
-            st.write(f"**Шаблон:**\n{wrapped_template}")
+            st.write(f"**Шаблон {i+1}:**\n{wrapped_template}")
             st.write(f"**Схожесть:** {score:.4f}")
+            if st.button(f"Скопировать шаблон {i+1}", key=i):
+                copy_to_clipboard(wrapped_template)
             st.write("************")
