@@ -20,7 +20,7 @@ s3 = boto3.client(
 )
 
 bucket_name = 'templates97'
-object_name = "typology_templates.xlsx"
+object_name = "template_embeddings.xlsx"
 
 try:
     response = s3.get_object(Bucket = bucket_name, Key = object_name)
