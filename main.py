@@ -14,17 +14,15 @@ import textwrap
 from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 import aiohttp
 
-with open("keys/password.txt", "r") as f:
-    PASSWORD = f.read().strip()
+# Теперь пароли и ключи берутся из streamlit secrets
+PASSWORD = st.secrets["PASSWORD"]
+ACCESS_KEY = st.secrets["ACCESS_KEY"]
+SECRET_KEY = st.secrets["SECRET_KEY"]
+HUGGINGFACE_TOKEN = st.secrets["HUGGINGFACE_TOKEN"]
 
 def load_hf_token():
-    try:
-        with open("keys/huggingface_token.txt", "r") as f:
-            hf_token = f.read().strip()
-            return hf_token
-    except FileNotFoundError:
-        st.error("Файл с токеном Hugging Face не найден!")
-        return None
+    # Загружаем токен Hugging Face из Streamlit Secrets
+    return HUGGINGFACE_TOKEN
 
 @st.cache_resource
 def load_whisper_model():
@@ -63,16 +61,12 @@ def transcribe_speech(audio_file):
 @st.cache_data
 def load_data_from_s3():
     try:
-        with open("keys/secret_keys.txt", "r") as f:
-            keys = f.readlines()
-        access_key = keys[0].split('=')[1].strip()
-        secret_key = keys[1].split('=')[1].strip()
         vk_cloud_endpoint = 'https://hb.bizmrg.com'
         s3 = boto3.client(
             's3',
             endpoint_url=vk_cloud_endpoint,
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
+            aws_access_key_id=ACCESS_KEY,
+            aws_secret_access_key=SECRET_KEY,
             config=Config(signature_version='s3v4')
         )
         bucket_name = 'templates97'
