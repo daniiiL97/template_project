@@ -1,6 +1,7 @@
 import os
 import asyncio
 import streamlit as st
+import streamlit.components.v1 as components
 import boto3
 from botocore.client import Config
 import pandas as pd
@@ -10,7 +11,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 import ast
 import textwrap
-import pyperclip
 from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 import aiohttp
 
@@ -126,9 +126,39 @@ def main():
             wrapped_template = textwrap.fill(template, width=100)
             st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
             st.write(f"**Схожесть:** {score:.4f}")
-            if st.button(f"Скопировать шаблон {i + 1}", key=f"copy_{i}"):
-                pyperclip.copy(wrapped_template)
-                st.success("Шаблон скопирован в буфер обмена!")
+
+            # Улучшаем стилизацию кнопки копирования
+            copy_button_html = f"""
+                <style>
+                    .copy-button {{
+                        background-color: #4CAF50;
+                        border: none;
+                        color: white;
+                        padding: 10px 20px;
+                        text-align: center;
+                        text-decoration: none;
+                        display: inline-block;
+                        font-size: 16px;
+                        margin: 4px 2px;
+                        cursor: pointer;
+                        border-radius: 12px;
+                    }}
+                </style>
+                <button class="copy-button" onclick="copyToClipboard('template_{i}')">Скопировать шаблон {i + 1}</button>
+                <textarea id="template_{i}" style="display:none;">{wrapped_template}</textarea>
+                <script>
+                function copyToClipboard(id) {{
+                    var copyText = document.getElementById(id);
+                    copyText.style.display = 'block';
+                    copyText.select();
+                    document.execCommand('copy');
+                    copyText.style.display = 'none';
+                    alert('Шаблон скопирован в буфер обмена!');
+                }}
+                </script>
+            """
+            components.html(copy_button_html)
+
             st.write("************")
 
 if "password_entered" not in st.session_state:
