@@ -14,20 +14,31 @@ import textwrap
 from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq, AutoTokenizer, AutoModelForSeq2SeqLM
 import aiohttp
 
+# Authentication details
 PASSWORD = st.secrets["PASSWORD"]
 ACCESS_KEY = st.secrets["ACCESS_KEY"]
 SECRET_KEY = st.secrets["SECRET_KEY"]
 HUGGINGFACE_TOKEN = st.secrets["HUGGINGFACE_TOKEN"]
 
+# Initialize session state for summaries
+if "summaries" not in st.session_state:
+    st.session_state["summaries"] = {}
+
+
+# Load Hugging Face token
 def load_hf_token():
     return HUGGINGFACE_TOKEN
 
+
+# Load Whisper model for speech-to-text
 @st.cache_resource
 def load_whisper_model():
     processor = AutoProcessor.from_pretrained("openai/whisper-large-v3-turbo")
     model = AutoModelForSpeechSeq2Seq.from_pretrained("openai/whisper-large-v3-turbo")
     return processor, model
 
+
+# Asynchronous function for speech recognition API call
 async def speech2text(audio_data) -> dict:
     API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
     hf_token = load_hf_token()
@@ -41,6 +52,8 @@ async def speech2text(audio_data) -> dict:
         st.error(f"Ошибка при обращении к API: {e}")
         return {}
 
+
+# Function to transcribe speech from audio file
 def transcribe_speech(audio_file):
     try:
         audio_bytes = audio_file.getvalue()
@@ -53,6 +66,8 @@ def transcribe_speech(audio_file):
         st.error(f"Ошибка транскрипции: {e}")
         return ""
 
+
+# Load embeddings data from S3
 @st.cache_data
 def load_data_from_s3():
     try:
@@ -76,22 +91,32 @@ def load_data_from_s3():
         st.error(f"Произошла ошибка при загрузке данных: {e}")
         st.stop()
 
+
+# Load text embedding model
 @st.cache_resource
 def load_model():
     return SentenceTransformer("intfloat/multilingual-e5-large")
 
+
+# Load summary model
 @st.cache_resource
 def load_summary_model():
     tokenizer = AutoTokenizer.from_pretrained("cointegrated/rut5-base-absum")
     model = AutoModelForSeq2SeqLM.from_pretrained("cointegrated/rut5-base-absum")
     return tokenizer, model
 
-def generate_summary(text):
+
+# Generate summary for text
+def generate_summary(text, index):
     tokenizer, model = load_summary_model()
     inputs = tokenizer("summarize: " + text, return_tensors="pt", max_length=512, truncation=True)
-    summary_ids = model.generate(inputs.input_ids, max_length=100, min_length=20, length_penalty=2.0, num_beams=4, early_stopping=True)
-    return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+    summary_ids = model.generate(inputs.input_ids, max_length=100, min_length=20, length_penalty=2.0, num_beams=4,
+                                 early_stopping=True)
+    summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+    st.session_state["summaries"][index] = summary  # Save summary in session state
 
+
+# Find relevant templates based on input text
 def find_relevant_templates(input_text, embeddings, df, top_n):
     model = load_model()
     input_embedding = model.encode(input_text)
@@ -101,11 +126,16 @@ def find_relevant_templates(input_text, embeddings, df, top_n):
     top_scores = similarities[top_indices]
     return top_templates, top_scores
 
+
+# Main function for the Streamlit app
 def main():
     st.title("Поиск релевантных шаблонов")
     df, embeddings = load_data_from_s3()
+
     if "input_phrase" not in st.session_state:
         st.session_state["input_phrase"] = ""
+
+    # Audio input
     audio_input = st.experimental_audio_input("Голосовой ввод 🎙️")
     if audio_input is not None:
         st.write("Аудио получено. Выполняется транскрибация звука...")
@@ -114,24 +144,33 @@ def main():
             st.write("Транскрибация завершена:")
             st.write(transcription)
             st.session_state["input_phrase"] = transcription
+
+    # Text input for search phrase
     st.session_state["input_phrase"] = st.text_input(
         "Введите текст для поиска релевантных шаблонов:",
         value=st.session_state["input_phrase"],
         key="search_phrase"
     )
+
+    # Slider for number of templates to return
     top_n = st.slider("Выберите количество шаблонов:", min_value=1, max_value=11, step=1)
+
+    # Button to find relevant templates
     if st.button("Найти шаблоны"):
         relevant_templates, scores = find_relevant_templates(st.session_state["input_phrase"], embeddings, df, top_n)
         st.write("Релевантные шаблоны:")
+
         for i, (template, score) in enumerate(zip(relevant_templates, scores)):
             wrapped_template = textwrap.fill(template, width=100)
             st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
             st.write(f"**Схожесть:** {score:.4f}")
 
-            # Add button to generate summary for the template
-            if st.button(f"Сделать краткое содержание для Шаблона {i + 1}"):
-                summary = generate_summary(template)
-                st.write(f"**Краткое содержание Шаблона {i + 1}:**\n{summary}")
+            # Display summary if available, otherwise show button to generate it
+            if i in st.session_state["summaries"]:
+                st.write(f"**Краткое содержание Шаблона {i + 1}:**\n{st.session_state['summaries'][i]}")
+            else:
+                if st.button(f"Сделать краткое содержание для Шаблона {i + 1}", key=f"summarize_button_{i}"):
+                    generate_summary(template, i)  # Generate and save summary
 
             # Copy button for the template
             copy_button_html = f"""
@@ -164,9 +203,10 @@ def main():
                 </script>
             """
             components.html(copy_button_html)
-
             st.write("************")
 
+
+# Authentication check
 if "password_entered" not in st.session_state:
     st.session_state["password_entered"] = False
 
