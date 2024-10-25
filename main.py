@@ -63,7 +63,7 @@ def transcribe_speech(audio_file):
         transcription = result.get("text", "")
         return transcription
     except Exception as e:
-        st.error(f"Ошибка транскрипции: {e}")
+        st.error(f"Ошибка транскрибации: {e}")
         return ""
 
 
@@ -107,13 +107,12 @@ def load_summary_model():
 
 
 # Generate summary for text
-def generate_summary(text, index):
+def generate_summary(text):
     tokenizer, model = load_summary_model()
     inputs = tokenizer("summarize: " + text, return_tensors="pt", max_length=512, truncation=True)
     summary_ids = model.generate(inputs.input_ids, max_length=100, min_length=20, length_penalty=2.0, num_beams=4,
                                  early_stopping=True)
-    summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
-    st.session_state["summaries"][index] = summary  # Save summary in session state
+    return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
 
 
 # Find relevant templates based on input text
@@ -165,12 +164,13 @@ def main():
             st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
             st.write(f"**Схожесть:** {score:.4f}")
 
-            # Display summary if available, otherwise show button to generate it
-            if i in st.session_state["summaries"]:
-                st.write(f"**Краткое содержание Шаблона {i + 1}:**\n{st.session_state['summaries'][i]}")
-            else:
-                if st.button(f"Сделать краткое содержание для Шаблона {i + 1}", key=f"summarize_button_{i}"):
-                    generate_summary(template, i)  # Generate and save summary
+            # Generate summary and display it using JavaScript
+            summary = generate_summary(template)
+            summary_display_html = f"""
+                <div id="summary_{i}" style="margin-top: 10px; color: #333; font-weight: bold;"></div>
+                <button onclick="document.getElementById('summary_{i}').innerText='{summary}';" style="background-color: #007bff; color: white; padding: 8px 12px; border-radius: 4px; border: none; cursor: pointer;">Сделать краткое содержание</button>
+            """
+            components.html(summary_display_html)
 
             # Copy button for the template
             copy_button_html = f"""
