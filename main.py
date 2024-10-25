@@ -19,17 +19,14 @@ ACCESS_KEY = st.secrets["ACCESS_KEY"]
 SECRET_KEY = st.secrets["SECRET_KEY"]
 HUGGINGFACE_TOKEN = st.secrets["HUGGINGFACE_TOKEN"]
 
-
 def load_hf_token():
     return HUGGINGFACE_TOKEN
-
 
 @st.cache_resource
 def load_whisper_model():
     processor = AutoProcessor.from_pretrained("openai/whisper-large-v3-turbo")
     model = AutoModelForSpeechSeq2Seq.from_pretrained("openai/whisper-large-v3-turbo")
     return processor, model
-
 
 async def speech2text(audio_data) -> dict:
     API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
@@ -44,7 +41,6 @@ async def speech2text(audio_data) -> dict:
         st.error(f"Ошибка при обращении к API: {e}")
         return {}
 
-
 def transcribe_speech(audio_file):
     try:
         audio_bytes = audio_file.getvalue()
@@ -56,7 +52,6 @@ def transcribe_speech(audio_file):
     except Exception as e:
         st.error(f"Ошибка транскрибации: {e}")
         return ""
-
 
 @st.cache_data
 def load_data_from_s3():
@@ -81,11 +76,9 @@ def load_data_from_s3():
         st.error(f"Произошла ошибка при загрузке данных: {e}")
         st.stop()
 
-
 @st.cache_resource
 def load_model():
     return SentenceTransformer("intfloat/multilingual-e5-large")
-
 
 @st.cache_resource
 def load_summary_model():
@@ -93,14 +86,11 @@ def load_summary_model():
     model = AutoModelForSeq2SeqLM.from_pretrained("cointegrated/rut5-base-absum")
     return tokenizer, model
 
-
-def generate_summary(text):
-    tokenizer, model = load_summary_model()
-    inputs = tokenizer("summarize: " + text, return_tensors="pt", max_length=512, truncation=True)
-    summary_ids = model.generate(inputs.input_ids, max_length=100, min_length=20, length_penalty=2.0, num_beams=4,
-                                 early_stopping=True)
-    return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
-
+# def generate_summary(text):
+#     tokenizer, model = load_summary_model()
+#     inputs = tokenizer("summarize: " + text, return_tensors="pt", max_length=512, truncation=True)
+#     summary_ids = model.generate(inputs.input_ids, max_length=100, min_length=20, length_penalty=2.0, num_beams=4, early_stopping=True)
+#     return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
 
 def find_relevant_templates(input_text, embeddings, df, top_n):
     model = load_model()
@@ -110,7 +100,6 @@ def find_relevant_templates(input_text, embeddings, df, top_n):
     top_templates = df.iloc[top_indices]['Текст шаблона в выбранной версии Типологизатора'].values
     top_scores = similarities[top_indices]
     return top_templates, top_scores
-
 
 def main():
     st.title("Поиск релевантных шаблонов")
@@ -137,9 +126,9 @@ def main():
             st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
             st.write(f"**Схожесть:** {score:.4f}")
 
-            if st.button(f"Сделать краткое содержание для Шаблона {i + 1}", key=f"summarize_button_{i}"):
-                summary = generate_summary(template)
-                st.write(f"**Краткое содержание Шаблона {i + 1}:**\n{summary}")
+            # if st.button(f"Сделать краткое содержание для Шаблона {i + 1}", key=f"summarize_button_{i}"):
+            #     summary = generate_summary(template)
+            #     st.write(f"**Краткое содержание Шаблона {i + 1}:**\n{summary}")
 
             copy_button_html = f"""
                 <style>
@@ -173,7 +162,6 @@ def main():
             st.components.v1.html(copy_button_html)
 
             st.write("************")
-
 
 if "password_entered" not in st.session_state:
     st.session_state["password_entered"] = False
