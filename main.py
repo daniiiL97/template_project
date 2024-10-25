@@ -11,17 +11,15 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 import ast
 import textwrap
-from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
+from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq, AutoTokenizer, AutoModelForSeq2SeqLM
 import aiohttp
 
-# Теперь пароли и ключи берутся из streamlit secrets
 PASSWORD = st.secrets["PASSWORD"]
 ACCESS_KEY = st.secrets["ACCESS_KEY"]
 SECRET_KEY = st.secrets["SECRET_KEY"]
 HUGGINGFACE_TOKEN = st.secrets["HUGGINGFACE_TOKEN"]
 
 def load_hf_token():
-    # Загружаем токен Hugging Face из Streamlit Secrets
     return HUGGINGFACE_TOKEN
 
 @st.cache_resource
@@ -33,9 +31,6 @@ def load_whisper_model():
 async def speech2text(audio_data) -> dict:
     API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
     hf_token = load_hf_token()
-    if not hf_token:
-        st.error("Токен Hugging Face не найден.")
-        return {}
     headers = {"Authorization": f"Bearer {hf_token}"}
     try:
         async with aiohttp.ClientSession() as session:
@@ -85,6 +80,18 @@ def load_data_from_s3():
 def load_model():
     return SentenceTransformer("intfloat/multilingual-e5-large")
 
+@st.cache_resource
+def load_summary_model():
+    tokenizer = AutoTokenizer.from_pretrained("cointegrated/rut5-base-absum")
+    model = AutoModelForSeq2SeqLM.from_pretrained("cointegrated/rut5-base-absum")
+    return tokenizer, model
+
+def generate_summary(text):
+    tokenizer, model = load_summary_model()
+    inputs = tokenizer("summarize: " + text, return_tensors="pt", max_length=512, truncation=True)
+    summary_ids = model.generate(inputs.input_ids, max_length=100, min_length=20, length_penalty=2.0, num_beams=4, early_stopping=True)
+    return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+
 def find_relevant_templates(input_text, embeddings, df, top_n):
     model = load_model()
     input_embedding = model.encode(input_text)
@@ -121,7 +128,12 @@ def main():
             st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
             st.write(f"**Схожесть:** {score:.4f}")
 
-            # Улучшаем стилизацию кнопки копирования
+            # Add button to generate summary for the template
+            if st.button(f"Сделать краткое содержание для Шаблона {i + 1}"):
+                summary = generate_summary(template)
+                st.write(f"**Краткое содержание Шаблона {i + 1}:**\n{summary}")
+
+            # Copy button for the template
             copy_button_html = f"""
                 <style>
                     .copy-button {{
