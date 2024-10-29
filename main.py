@@ -19,7 +19,7 @@ PASSWORD = st.secrets["PASSWORD"]
 ACCESS_KEY = st.secrets["ACCESS_KEY"]
 SECRET_KEY = st.secrets["SECRET_KEY"]
 HUGGINGFACE_TOKEN = st.secrets["HUGGINGFACE_TOKEN"]
-API_TOKEN = st.secrets["API_TOKEN"]
+API_TOKEN = HUGGINGFACE_TOKEN
 
 def load_hf_token():
     return HUGGINGFACE_TOKEN
