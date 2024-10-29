@@ -13,11 +13,13 @@ import ast
 import textwrap
 from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 import aiohttp
+import requests
 
 PASSWORD = st.secrets["PASSWORD"]
 ACCESS_KEY = st.secrets["ACCESS_KEY"]
 SECRET_KEY = st.secrets["SECRET_KEY"]
 HUGGINGFACE_TOKEN = st.secrets["HUGGINGFACE_TOKEN"]
+API_TOKEN = st.secrets["API_TOKEN"]
 
 def load_hf_token():
     return HUGGINGFACE_TOKEN
@@ -55,6 +57,25 @@ def transcribe_speech(audio_file):
     except Exception as e:
         st.error(f"Ошибка транскрипции: {e}")
         return ""
+
+async def summarize_text(text, model="RussianNLP/FRED-T5-Summarizer"):
+    url = f"https://api-inference.huggingface.co/models/{model}"
+    headers = {
+        "Authorization": f"Bearer {API_TOKEN}"
+    }
+    payload = {
+        "inputs": text,
+        "parameters": {"max_length": 50, "min_length": 25, "do_sample": False}
+    }
+    response = requests.post(url, headers=headers, json=payload)
+
+    if response.status_code == 200:
+        return response.json()[0]['summary_text']
+    else:
+        st.error(f"Ошибка при суммаризации: {response.status_code}")
+        return None
+
+
 
 @st.cache_data
 def load_data_from_s3():
@@ -118,6 +139,11 @@ def main():
             wrapped_template = textwrap.fill(template, width=100)
             st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
             st.write(f"**Схожесть:** {score:.4f}")
+
+            if st.button(f"Суммаризовать Шаблон {i + 1}", key=f"sum_button_{i}"):
+                summary = summarize_text(template)
+                if summary:
+                    st.write(f"Суммаризация шаблона {i+1}:** {summary}")
 
             copy_button_html = f"""
                 <style>
