@@ -14,12 +14,14 @@ import textwrap
 from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 import aiohttp
 
+# Теперь пароли и ключи берутся из streamlit secrets
 PASSWORD = st.secrets["PASSWORD"]
 ACCESS_KEY = st.secrets["ACCESS_KEY"]
 SECRET_KEY = st.secrets["SECRET_KEY"]
 HUGGINGFACE_TOKEN = st.secrets["HUGGINGFACE_TOKEN"]
 
 def load_hf_token():
+    # Загружаем токен Hugging Face из Streamlit Secrets
     return HUGGINGFACE_TOKEN
 
 @st.cache_resource
@@ -55,15 +57,6 @@ def transcribe_speech(audio_file):
     except Exception as e:
         st.error(f"Ошибка транскрипции: {e}")
         return ""
-
-async def summarize_text(text, model="RussianNLP/FRED-T5-Summarizer"):
-    url = f"https://api-inference.huggingface.co/models/{model}"
-    headers = {
-        "Authorization": f""
-
-    }
-
-
 
 @st.cache_data
 def load_data_from_s3():
@@ -128,6 +121,7 @@ def main():
             st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
             st.write(f"**Схожесть:** {score:.4f}")
 
+            # Улучшаем стилизацию кнопки копирования
             copy_button_html = f"""
                 <style>
                     .copy-button {{
