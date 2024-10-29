@@ -13,7 +13,6 @@ import ast
 import textwrap
 from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 import aiohttp
-import requests
 
 PASSWORD = st.secrets["PASSWORD"]
 ACCESS_KEY = st.secrets["ACCESS_KEY"]
@@ -67,15 +66,14 @@ async def summarize_text(text, model="RussianNLP/FRED-T5-Summarizer"):
         "inputs": text,
         "parameters": {"max_length": 50, "min_length": 25, "do_sample": False}
     }
-    response = requests.post(url, headers=headers, json=payload)
-
-    if response.status_code == 200:
-        return response.json()[0]['summary_text']
-    else:
-        st.error(f"Ошибка при суммаризации: {response.status_code}")
-        return None
-
-
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=headers, json=payload) as response:
+            if response.status == 200:
+                result = await response.json()
+                return result[0]['summary_text']
+            else:
+                st.error(f"Ошибка при суммаризации: {response.status}")
+                return None
 
 @st.cache_data
 def load_data_from_s3():
@@ -140,10 +138,16 @@ def main():
             st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
             st.write(f"**Схожесть:** {score:.4f}")
 
+            if f"summary_{i}" not in st.session_state:
+                st.session_state[f"summary_{i}"] = ""
+
             if st.button(f"Суммаризовать Шаблон {i + 1}", key=f"sum_button_{i}"):
-                summary = summarize_text(template)
+                summary = asyncio.run(summarize_text(template))
                 if summary:
-                    st.write(f"Суммаризация шаблона {i+1}:** {summary}")
+                    st.session_state[f"summary_{i}"] = summary
+
+            if st.session_state[f"summary_{i}"]:
+                st.write(f"**Суммаризация шаблона {i+1}:** {st.session_state[f'summary_{i}']}")
 
             copy_button_html = f"""
                 <style>
