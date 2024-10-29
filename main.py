@@ -142,13 +142,20 @@ def main():
                 st.session_state[f"summary_{i}"] = ""
 
             if st.button(f"Суммаризовать Шаблон {i + 1}", key=f"sum_button_{i}"):
-                summary = asyncio.run(summarize_text(template))
-                if summary:
-                    st.session_state[f"summary_{i}"] = summary
+                # Создаем асинхронную задачу для суммаризации
+                task = asyncio.create_task(summarize_text(template))
+                try:
+                    summary = asyncio.run_until_complete(task)
+                    if summary:
+                        st.session_state[f"summary_{i}"] = summary
+                except Exception as e:
+                    st.error(f"Ошибка при суммаризации шаблона {i + 1}: {e}")
 
+            # Отображаем суммаризацию, если она была выполнена
             if st.session_state[f"summary_{i}"]:
                 st.write(f"**Суммаризация шаблона {i+1}:** {st.session_state[f'summary_{i}']}")
 
+            # HTML для кнопки копирования
             copy_button_html = f"""
                 <style>
                     .copy-button {{
