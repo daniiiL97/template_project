@@ -14,14 +14,12 @@ import textwrap
 from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 import aiohttp
 
-# Теперь пароли и ключи берутся из streamlit secrets
 PASSWORD = st.secrets["PASSWORD"]
 ACCESS_KEY = st.secrets["ACCESS_KEY"]
 SECRET_KEY = st.secrets["SECRET_KEY"]
 HUGGINGFACE_TOKEN = st.secrets["HUGGINGFACE_TOKEN"]
 
 def load_hf_token():
-    # Загружаем токен Hugging Face из Streamlit Secrets
     return HUGGINGFACE_TOKEN
 
 @st.cache_resource
