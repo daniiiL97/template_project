@@ -1,5 +1,4 @@
 import os
-import asyncio
 import streamlit as st
 import streamlit.components.v1 as components
 import boto3
@@ -11,8 +10,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 import ast
 import textwrap
-from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
-import aiohttp
+import requests
 
 PASSWORD = st.secrets["PASSWORD"]
 ACCESS_KEY = st.secrets["ACCESS_KEY"]
@@ -20,60 +18,15 @@ SECRET_KEY = st.secrets["SECRET_KEY"]
 HUGGINGFACE_TOKEN = st.secrets["HUGGINGFACE_TOKEN"]
 API_TOKEN = HUGGINGFACE_TOKEN
 
+
 def load_hf_token():
     return HUGGINGFACE_TOKEN
 
+
 @st.cache_resource
-def load_whisper_model():
-    processor = AutoProcessor.from_pretrained("openai/whisper-large-v3-turbo")
-    model = AutoModelForSpeechSeq2Seq.from_pretrained("openai/whisper-large-v3-turbo")
-    return processor, model
+def load_model():
+    return SentenceTransformer("intfloat/multilingual-e5-large")
 
-async def speech2text(audio_data) -> dict:
-    API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
-    hf_token = load_hf_token()
-    if not hf_token:
-        st.error("Токен Hugging Face не найден.")
-        return {}
-    headers = {"Authorization": f"Bearer {hf_token}"}
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(API_URL, headers=headers, data=audio_data) as response:
-                result = await response.json()
-                return result
-    except Exception as e:
-        st.error(f"Ошибка при обращении к API: {e}")
-        return {}
-
-def transcribe_speech(audio_file):
-    try:
-        audio_bytes = audio_file.getvalue()
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(speech2text(audio_bytes))
-        transcription = result.get("text", "")
-        return transcription
-    except Exception as e:
-        st.error(f"Ошибка транскрипции: {e}")
-        return ""
-
-async def summarize_text(text, model="RussianNLP/FRED-T5-Summarizer"):
-    url = f"https://api-inference.huggingface.co/models/{model}"
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
-    payload = {
-        "inputs": text,
-        "parameters": {"max_length": 50, "min_length": 25, "do_sample": False}
-    }
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, headers=headers, json=payload) as response:
-            if response.status == 200:
-                result = await response.json()
-                return result[0]['summary_text']
-            else:
-                st.error(f"Ошибка при суммаризации: {response.status}")
-                return None
 
 @st.cache_data
 def load_data_from_s3():
@@ -98,9 +51,6 @@ def load_data_from_s3():
         st.error(f"Произошла ошибка при загрузке данных: {e}")
         st.stop()
 
-@st.cache_resource
-def load_model():
-    return SentenceTransformer("intfloat/multilingual-e5-large")
 
 def find_relevant_templates(input_text, embeddings, df, top_n):
     model = load_model()
@@ -111,19 +61,30 @@ def find_relevant_templates(input_text, embeddings, df, top_n):
     top_scores = similarities[top_indices]
     return top_templates, top_scores
 
+
+def summarize_text_sync(text, model="RussianNLP/FRED-T5-Summarizer"):
+    url = f"https://api-inference.huggingface.co/models/{model}"
+    headers = {
+        "Authorization": f"Bearer {API_TOKEN}"
+    }
+    payload = {
+        "inputs": text,
+        "parameters": {"max_length": 50, "min_length": 25, "do_sample": False}
+    }
+    response = requests.post(url, headers=headers, json=payload)
+    if response.status_code == 200:
+        return response.json()[0]['summary_text']
+    else:
+        st.error(f"Ошибка при суммаризации: {response.status_code}")
+        return None
+
+
 def main():
     st.title("Поиск релевантных шаблонов")
     df, embeddings = load_data_from_s3()
     if "input_phrase" not in st.session_state:
         st.session_state["input_phrase"] = ""
-    audio_input = st.experimental_audio_input("Голосовой ввод 🎙️")
-    if audio_input is not None:
-        st.write("Аудио получено. Выполняется транскрибация звука...")
-        transcription = transcribe_speech(audio_input)
-        if transcription:
-            st.write("Транскрибация завершена:")
-            st.write(transcription)
-            st.session_state["input_phrase"] = transcription
+
     st.session_state["input_phrase"] = st.text_input(
         "Введите текст для поиска релевантных шаблонов:",
         value=st.session_state["input_phrase"],
@@ -138,22 +99,17 @@ def main():
             st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
             st.write(f"**Схожесть:** {score:.4f}")
 
+            # Суммаризация для каждого шаблона
             if f"summary_{i}" not in st.session_state:
                 st.session_state[f"summary_{i}"] = ""
 
             if st.button(f"Суммаризовать Шаблон {i + 1}", key=f"sum_button_{i}"):
-                # Создаем асинхронную задачу для суммаризации
-                task = asyncio.create_task(summarize_text(template))
-                try:
-                    summary = asyncio.run_until_complete(task)
-                    if summary:
-                        st.session_state[f"summary_{i}"] = summary
-                except Exception as e:
-                    st.error(f"Ошибка при суммаризации шаблона {i + 1}: {e}")
+                summary = summarize_text_sync(template)
+                if summary:
+                    st.session_state[f"summary_{i}"] = summary
 
-            # Отображаем суммаризацию, если она была выполнена
             if st.session_state[f"summary_{i}"]:
-                st.write(f"**Суммаризация шаблона {i+1}:** {st.session_state[f'summary_{i}']}")
+                st.write(f"**Суммаризация шаблона {i + 1}:** {st.session_state[f'summary_{i}']}")
 
             # HTML для кнопки копирования
             copy_button_html = f"""
@@ -188,6 +144,7 @@ def main():
             components.html(copy_button_html)
 
             st.write("************")
+
 
 if "password_entered" not in st.session_state:
     st.session_state["password_entered"] = False
