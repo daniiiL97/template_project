@@ -1,9 +1,6 @@
 import os
 import asyncio
 import streamlit as st
-import os
-import asyncio
-import streamlit as st
 import streamlit.components.v1 as components
 import boto3
 from botocore.client import Config
@@ -14,16 +11,18 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 import ast
 import textwrap
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from streamlit_modal import Modal
+from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
+import aiohttp
 
+# Теперь пароли и ключи берутся из streamlit secrets
 PASSWORD = st.secrets["PASSWORD"]
 ACCESS_KEY = st.secrets["ACCESS_KEY"]
 SECRET_KEY = st.secrets["SECRET_KEY"]
 HUGGINGFACE_TOKEN = st.secrets["HUGGINGFACE_TOKEN"]
 
 def load_hf_token():
-    return st.secrets["HUGGINGFACE_TOKEN"]
+    # Загружаем токен Hugging Face из Streamlit Secrets
+    return HUGGINGFACE_TOKEN
 
 @st.cache_resource
 def load_whisper_model():
@@ -35,7 +34,7 @@ async def speech2text(audio_data) -> dict:
     API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
     hf_token = load_hf_token()
     if not hf_token:
-        st.error("Hugging Face token not found.")
+        st.error("Токен Hugging Face не найден.")
         return {}
     headers = {"Authorization": f"Bearer {hf_token}"}
     try:
@@ -44,7 +43,7 @@ async def speech2text(audio_data) -> dict:
                 result = await response.json()
                 return result
     except Exception as e:
-        st.error(f"API error: {e}")
+        st.error(f"Ошибка при обращении к API: {e}")
         return {}
 
 def transcribe_speech(audio_file):
@@ -56,7 +55,7 @@ def transcribe_speech(audio_file):
         transcription = result.get("text", "")
         return transcription
     except Exception as e:
-        st.error(f"Transcription error: {e}")
+        st.error(f"Ошибка транскрипции: {e}")
         return ""
 
 @st.cache_data
@@ -79,18 +78,12 @@ def load_data_from_s3():
         embeddings = df['embedding'].apply(lambda x: np.array(x)).tolist()
         return df, embeddings
     except Exception as e:
-        st.error(f"Ошибка при загрузке данных: {e}")
+        st.error(f"Произошла ошибка при загрузке данных: {e}")
         st.stop()
 
 @st.cache_resource
 def load_model():
     return SentenceTransformer("intfloat/multilingual-e5-large")
-
-@st.cache_resource
-def load_summarizer_model():
-    tokenizer = AutoTokenizer.from_pretrained("RussianNLP/FRED-T5-Summarizer")
-    model = AutoModelForSeq2SeqLM.from_pretrained("RussianNLP/FRED-T5-Summarizer")
-    return tokenizer, model
 
 def find_relevant_templates(input_text, embeddings, df, top_n):
     model = load_model()
@@ -100,13 +93,6 @@ def find_relevant_templates(input_text, embeddings, df, top_n):
     top_templates = df.iloc[top_indices]['Текст шаблона в выбранной версии Типологизатора'].values
     top_scores = similarities[top_indices]
     return top_templates, top_scores
-
-def summarize_text(text):
-    tokenizer, model = load_summarizer_model()
-    inputs = tokenizer(text, return_tensors="pt", max_length=512, truncation=True)
-    summary_ids = model.generate(inputs.input_ids, max_length=150, num_beams=4, early_stopping=True)
-    summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
-    return summary
 
 def main():
     st.title("Поиск релевантных шаблонов")
@@ -130,36 +116,12 @@ def main():
     if st.button("Найти шаблоны"):
         relevant_templates, scores = find_relevant_templates(st.session_state["input_phrase"], embeddings, df, top_n)
         st.write("Релевантные шаблоны:")
-
         for i, (template, score) in enumerate(zip(relevant_templates, scores)):
             wrapped_template = textwrap.fill(template, width=100)
             st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
             st.write(f"**Схожесть:** {score:.4f}")
 
-
-            modal = Modal(f"Суммаризация шаблона {i + 1}", key=f"summary_modal_{i}", padding=20, max_width=744)
-            open_modal = st.button("Open")
-            if open_modal:
-                modal.open()
-
-            if modal.is_open():
-                with modal.container():
-                    st.write("Text goes here")
-
-                    html_string = '''
-                    <h1>HTML string in RED</h1>
-
-                    <script language="javascript">
-                      document.querySelector("h1").style.color = "red";
-                    </script>
-                    '''
-                    components.html(html_string)
-
-                    st.write("Some fancy text")
-                    value = st.checkbox("Check me")
-                    st.write(f"Checkbox checked: {value}")
-
-            # Кнопка для копирования шаблона
+            # Улучшаем стилизацию кнопки копирования
             copy_button_html = f"""
                 <style>
                     .copy-button {{
