@@ -119,7 +119,6 @@ def main():
             st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
             st.write(f"**Схожесть:** {score:.4f}")
 
-            # Улучшаем стилизацию кнопки копирования
             copy_button_html = f"""
                 <style>
                     .copy-button {{
