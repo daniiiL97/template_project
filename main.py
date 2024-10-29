@@ -22,17 +22,14 @@ ACCESS_KEY = st.secrets["ACCESS_KEY"]
 SECRET_KEY = st.secrets["SECRET_KEY"]
 HUGGINGFACE_TOKEN = st.secrets["HUGGINGFACE_TOKEN"]
 
-
 def load_hf_token():
     return st.secrets["HUGGINGFACE_TOKEN"]
-
 
 @st.cache_resource
 def load_whisper_model():
     processor = AutoProcessor.from_pretrained("openai/whisper-large-v3-turbo")
     model = AutoModelForSpeechSeq2Seq.from_pretrained("openai/whisper-large-v3-turbo")
     return processor, model
-
 
 async def speech2text(audio_data) -> dict:
     API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
@@ -50,7 +47,6 @@ async def speech2text(audio_data) -> dict:
         st.error(f"API error: {e}")
         return {}
 
-
 def transcribe_speech(audio_file):
     try:
         audio_bytes = audio_file.getvalue()
@@ -62,7 +58,6 @@ def transcribe_speech(audio_file):
     except Exception as e:
         st.error(f"Transcription error: {e}")
         return ""
-
 
 @st.cache_data
 def load_data_from_s3():
@@ -84,21 +79,18 @@ def load_data_from_s3():
         embeddings = df['embedding'].apply(lambda x: np.array(x)).tolist()
         return df, embeddings
     except Exception as e:
-        st.error(f"Error loading data: {e}")
+        st.error(f"Ошибка при загрузке данных: {e}")
         st.stop()
-
 
 @st.cache_resource
 def load_model():
     return SentenceTransformer("intfloat/multilingual-e5-large")
-
 
 @st.cache_resource
 def load_summarizer_model():
     tokenizer = AutoTokenizer.from_pretrained("RussianNLP/FRED-T5-Summarizer")
     model = AutoModelForSeq2SeqLM.from_pretrained("RussianNLP/FRED-T5-Summarizer")
     return tokenizer, model
-
 
 def find_relevant_templates(input_text, embeddings, df, top_n):
     model = load_model()
@@ -109,7 +101,6 @@ def find_relevant_templates(input_text, embeddings, df, top_n):
     top_scores = similarities[top_indices]
     return top_templates, top_scores
 
-
 def summarize_text(text):
     tokenizer, model = load_summarizer_model()
     inputs = tokenizer(text, return_tensors="pt", max_length=512, truncation=True)
@@ -117,44 +108,54 @@ def summarize_text(text):
     summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
     return summary
 
-
 def main():
-    st.title("Template Search with Summarization")
+    st.title("Поиск релевантных шаблонов")
     df, embeddings = load_data_from_s3()
     if "input_phrase" not in st.session_state:
         st.session_state["input_phrase"] = ""
-    audio_input = st.experimental_audio_input("Voice input 🎙️")
+    audio_input = st.experimental_audio_input("Голосовой ввод 🎙️")
     if audio_input is not None:
-        st.write("Audio received. Transcribing...")
+        st.write("Аудио получено. Выполняется транскрибация звука...")
         transcription = transcribe_speech(audio_input)
         if transcription:
-            st.write("Transcription complete:")
+            st.write("Транскрибация завершена:")
             st.write(transcription)
             st.session_state["input_phrase"] = transcription
     st.session_state["input_phrase"] = st.text_input(
-        "Enter text to search for relevant templates:",
+        "Введите текст для поиска релевантных шаблонов:",
         value=st.session_state["input_phrase"],
         key="search_phrase"
     )
-    top_n = st.slider("Select the number of templates:", min_value=1, max_value=11, step=1)
-    if st.button("Find templates"):
+    top_n = st.slider("Выберите количество шаблонов:", min_value=1, max_value=11, step=1)
+    if st.button("Найти шаблоны"):
         relevant_templates, scores = find_relevant_templates(st.session_state["input_phrase"], embeddings, df, top_n)
-        st.write("Relevant templates:")
+        st.write("Релевантные шаблоны:")
 
         for i, (template, score) in enumerate(zip(relevant_templates, scores)):
             wrapped_template = textwrap.fill(template, width=100)
-            st.write(f"**Template {i + 1}:**\n{wrapped_template}")
-            st.write(f"**Similarity:** {score:.4f}")
+            st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
+            st.write(f"**Схожесть:** {score:.4f}")
 
-            # Modal for summarization
-            modal = Modal(key=f"summary_modal_{i}")
-            if st.button(f"Summarize Template {i + 1}"):
+            # Модальное окно для суммаризации
+            modal = Modal(f"Суммаризация шаблона {i + 1}", key=f"summary_modal_{i}", padding=20, max_width=744)
+            if st.button(f"Суммаризировать шаблон {i + 1}"):
+                modal.open()
+
+            if modal.is_open():
                 with modal.container():
-                    st.write(f"Summarizing Template {i + 1}...")
+                    st.write(f"Суммаризация для шаблона {i + 1}:")
                     summary = summarize_text(template)
-                    st.write(f"**Summary:** {summary}")
+                    st.write(f"**Суммаризация:** {summary}")
 
-            # Improve styling of copy button
+                    html_string = '''
+                    <h1>HTML пример</h1>
+                    <script language="javascript">
+                      document.querySelector("h1").style.color = "red";
+                    </script>
+                    '''
+                    components.html(html_string)
+
+            # Кнопка для копирования шаблона
             copy_button_html = f"""
                 <style>
                     .copy-button {{
@@ -171,7 +172,7 @@ def main():
                         border-radius: 12px;
                     }}
                 </style>
-                <button class="copy-button" onclick="copyToClipboard('template_{i}')">Copy Template {i + 1}</button>
+                <button class="copy-button" onclick="copyToClipboard('template_{i}')">Скопировать шаблон {i + 1}</button>
                 <textarea id="template_{i}" style="display:none;">{wrapped_template}</textarea>
                 <script>
                 function copyToClipboard(id) {{
@@ -180,7 +181,7 @@ def main():
                     copyText.select();
                     document.execCommand('copy');
                     copyText.style.display = 'none';
-                    alert('Template copied to clipboard!');
+                    alert('Шаблон скопирован в буфер обмена!');
                 }}
                 </script>
             """
@@ -188,18 +189,17 @@ def main():
 
             st.write("************")
 
-
 if "password_entered" not in st.session_state:
     st.session_state["password_entered"] = False
 
 if not st.session_state["password_entered"]:
-    st.title("App Login")
-    password_input = st.text_input("Enter password:", type="password")
-    if st.button("Login"):
+    st.title("Вход в приложение")
+    password_input = st.text_input("Введите пароль:", type="password")
+    if st.button("Войти"):
         if password_input == PASSWORD:
             st.session_state["password_entered"] = True
-            st.success("Successfully logged in!")
+            st.success("Вы успешно вошли!")
         else:
-            st.error("Incorrect password. Try again.")
+            st.error("Неверный пароль. Попробуйте снова.")
 else:
     main()
