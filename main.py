@@ -62,11 +62,10 @@ def find_relevant_templates(input_text, embeddings, df, top_n):
     return top_templates, top_scores
 
 
+# Функция для суммаризации текста
 def summarize_text_sync(text, model="RussianNLP/FRED-T5-Summarizer"):
     url = f"https://api-inference.huggingface.co/models/{model}"
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
     payload = {
         "inputs": text,
         "parameters": {"max_length": 50, "min_length": 25, "do_sample": False}
@@ -79,35 +78,68 @@ def summarize_text_sync(text, model="RussianNLP/FRED-T5-Summarizer"):
         return None
 
 
+# Функция для транскрипции аудио
+def transcribe_audio(audio_data):
+    API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v2"
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
+    response = requests.post(API_URL, headers=headers, data=audio_data)
+    if response.status_code == 200:
+        return response.json().get("text", "")
+    else:
+        st.error(f"Ошибка транскрипции: {response.status_code}")
+        return ""
+
+
 def main():
     st.title("Поиск релевантных шаблонов")
+
+    # Загрузка данных и настроек
     df, embeddings = load_data_from_s3()
     if "input_phrase" not in st.session_state:
         st.session_state["input_phrase"] = ""
 
+    # Аудио ввод и его транскрипция
+    audio_input = st.file_uploader("Загрузите аудиофайл для транскрипции 🎙️", type=["wav", "mp3"])
+    if audio_input:
+        st.write("Транскрибируем аудио...")
+        transcription = transcribe_audio(audio_input.read())
+        if transcription:
+            st.write("Транскрипция завершена:")
+            st.write(transcription)
+            st.session_state["input_phrase"] = transcription
+
+    # Текстовый ввод
     st.session_state["input_phrase"] = st.text_input(
         "Введите текст для поиска релевантных шаблонов:",
         value=st.session_state["input_phrase"],
         key="search_phrase"
     )
+
+    # Слайдер для выбора количества шаблонов
     top_n = st.slider("Выберите количество шаблонов:", min_value=1, max_value=11, step=1)
+
+    # Кнопка для поиска шаблонов
     if st.button("Найти шаблоны"):
         relevant_templates, scores = find_relevant_templates(st.session_state["input_phrase"], embeddings, df, top_n)
         st.write("Релевантные шаблоны:")
+
+        # Цикл для отображения шаблонов и кнопок суммаризации
         for i, (template, score) in enumerate(zip(relevant_templates, scores)):
             wrapped_template = textwrap.fill(template, width=100)
             st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
             st.write(f"**Схожесть:** {score:.4f}")
 
-            # Суммаризация для каждого шаблона
+            # Проверка состояния для отображения суммаризации
             if f"summary_{i}" not in st.session_state:
                 st.session_state[f"summary_{i}"] = ""
 
+            # Кнопка суммаризации с сохранением результата в session_state
             if st.button(f"Суммаризовать Шаблон {i + 1}", key=f"sum_button_{i}"):
                 summary = summarize_text_sync(template)
                 if summary:
                     st.session_state[f"summary_{i}"] = summary
 
+            # Отображение суммаризированного текста, если он есть
             if st.session_state[f"summary_{i}"]:
                 st.write(f"**Суммаризация шаблона {i + 1}:** {st.session_state[f'summary_{i}']}")
 
@@ -142,10 +174,10 @@ def main():
                 </script>
             """
             components.html(copy_button_html)
-
             st.write("************")
 
 
+# Вход в приложение
 if "password_entered" not in st.session_state:
     st.session_state["password_entered"] = False
 
