@@ -10,4 +10,4 @@ openpyxl
 tiktoken
 sentencepiece
 requests
-streamlit_modal
+streamlit-modal
