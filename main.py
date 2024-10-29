@@ -136,24 +136,28 @@ def main():
             st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
             st.write(f"**Схожесть:** {score:.4f}")
 
-            # Модальное окно для суммаризации
+
             modal = Modal(f"Суммаризация шаблона {i + 1}", key=f"summary_modal_{i}", padding=20, max_width=744)
-            if st.button(f"Суммаризировать шаблон {i + 1}"):
+            open_modal = st.button("Open")
+            if open_modal:
                 modal.open()
 
             if modal.is_open():
                 with modal.container():
-                    st.write(f"Суммаризация для шаблона {i + 1}:")
-                    summary = summarize_text(template)
-                    st.write(f"**Суммаризация:** {summary}")
+                    st.write("Text goes here")
 
                     html_string = '''
-                    <h1>HTML пример</h1>
+                    <h1>HTML string in RED</h1>
+
                     <script language="javascript">
                       document.querySelector("h1").style.color = "red";
                     </script>
                     '''
                     components.html(html_string)
+
+                    st.write("Some fancy text")
+                    value = st.checkbox("Check me")
+                    st.write(f"Checkbox checked: {value}")
 
             # Кнопка для копирования шаблона
             copy_button_html = f"""
