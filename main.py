@@ -154,8 +154,8 @@ def main():
         st.write("Релевантные шаблоны:")
 
         for i, (template, score) in enumerate(zip(relevant_templates, scores)):
-            wrapped_template = textwrap.fill(template, width=100)
-            st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
+            st.write(f"**Шаблон {i + 1}:**")
+            st.write(template)  # Выводим текст шаблона без `textwrap.fill`
             st.write(f"**Схожесть:** {score:.4f}")
 
             # Кнопка для суммаризации и копирования с использованием JavaScript
