@@ -11,5 +11,3 @@ tiktoken
 sentencepiece
 requests
 streamlit-modal
-time
-requests
