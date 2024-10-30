@@ -105,9 +105,6 @@ def summarize_text(text, retries=3, delay=10):
             if response.status_code == 200:
                 result = response.json()
                 return result[0].get('summary_text', "Ошибка: ключ 'summary_text' не найден в ответе.")
-            elif response.status_code == 503:
-                st.warning(f"Сервер временно недоступен (503). Попытка {attempt + 1} из {retries}...")
-                time.sleep(delay)
             else:
                 st.error(f"Ошибка {response.status_code} при обращении к API. Ответ: {response.text}")
                 return f"Ошибка: {response.status_code}, попробуйте позже."
