@@ -13,11 +13,16 @@ import ast
 import textwrap
 from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 import aiohttp
+import requests
+import time
 
 PASSWORD = st.secrets["PASSWORD"]
 ACCESS_KEY = st.secrets["ACCESS_KEY"]
 SECRET_KEY = st.secrets["SECRET_KEY"]
 HUGGINGFACE_TOKEN = st.secrets["HUGGINGFACE_TOKEN"]
+
+API_URL = "https://api-inference.huggingface.co/models/RussianNLP/FRED-T5-Summarizer"
+headers = {"Authorization": f"Bearer {HUGGINGFACE_TOKEN}"}
 
 def load_hf_token():
     return HUGGINGFACE_TOKEN
@@ -92,11 +97,37 @@ def find_relevant_templates(input_text, embeddings, df, top_n):
     top_scores = similarities[top_indices]
     return top_templates, top_scores
 
+def summarize_text(text, retries=3, delay=5):
+    payload = {"inputs": text, "parameters": {"max_length": 300, "min_length": 100, "do_sample": False}}
+    for attempt in range(retries):
+        try:
+            response = requests.post(API_URL, headers=headers, json=payload)
+            if response.status_code == 200:
+                result = response.json()
+                return result[0].get('summary_text', "Ошибка: ключ 'summary_text' не найден в ответе.")
+            elif response.status_code == 503:
+                st.warning(f"Сервер временно недоступен (503). Попытка {attempt + 1} из {retries}...")
+                time.sleep(delay)
+            else:
+                st.error(f"Ошибка {response.status_code} при обращении к API. Ответ: {response.text}")
+                return f"Ошибка: {response.status_code}, попробуйте позже."
+        except requests.exceptions.RequestException as e:
+            st.error(f"Ошибка сети: {e}")
+            return "Ошибка при попытке суммаризации."
+
+    return "Сервер недоступен, попробуйте позже."
+
+
 def main():
     st.title("Поиск релевантных шаблонов")
-    df, embeddings = load_data_from_s3()
+
     if "input_phrase" not in st.session_state:
         st.session_state["input_phrase"] = ""
+    if "show_modal" not in st.session_state:
+        st.session_state["show_modal"] = False
+    if "current_summary" not in st.session_state:
+        st.session_state["current_summary"] = ""
+
     audio_input = st.experimental_audio_input("Голосовой ввод 🎙️")
     if audio_input is not None:
         st.write("Аудио получено. Выполняется транскрибация звука...")
@@ -105,54 +136,91 @@ def main():
             st.write("Транскрибация завершена:")
             st.write(transcription)
             st.session_state["input_phrase"] = transcription
+
+    # Поле для ввода текста и выбор количества шаблонов
     st.session_state["input_phrase"] = st.text_input(
         "Введите текст для поиска релевантных шаблонов:",
         value=st.session_state["input_phrase"],
         key="search_phrase"
     )
     top_n = st.slider("Выберите количество шаблонов:", min_value=1, max_value=11, step=1)
+
+    # Кнопка для поиска релевантных шаблонов
     if st.button("Найти шаблоны"):
         relevant_templates, scores = find_relevant_templates(st.session_state["input_phrase"], embeddings, df, top_n)
         st.write("Релевантные шаблоны:")
+
         for i, (template, score) in enumerate(zip(relevant_templates, scores)):
             wrapped_template = textwrap.fill(template, width=100)
             st.write(f"**Шаблон {i + 1}:**\n{wrapped_template}")
             st.write(f"**Схожесть:** {score:.4f}")
 
-            # Улучшаем стилизацию кнопки копирования
+            # Кнопка для суммаризации и копирования с использованием JavaScript
             copy_button_html = f"""
+                <button onclick="copyToClipboard('template_{i}')">Скопировать шаблон {i + 1}</button>
+                <button onclick="openModal('modal_{i}')">Суммаризировать шаблон {i + 1}</button>
+                <textarea id="template_{i}" style="display:none;">{wrapped_template}</textarea>
+                <div id="modal_{i}" class="modal" style="display:none;">
+                    <div class="modal-content">
+                        <span class="close" onclick="closeModal('modal_{i}')">&times;</span>
+                        <p>Суммаризация:</p>
+                        <p>{summarize_text(wrapped_template)}</p>
+                    </div>
+                </div>
+                <script>
+                    function copyToClipboard(id) {{
+                        var copyText = document.getElementById(id);
+                        copyText.style.display = 'block';
+                        copyText.select();
+                        document.execCommand('copy');
+                        copyText.style.display = 'none';
+                        alert('Шаблон скопирован в буфер обмена!');
+                    }}
+                    function openModal(id) {{
+                        document.getElementById(id).style.display = 'block';
+                    }}
+                    function closeModal(id) {{
+                        document.getElementById(id).style.display = 'none';
+                    }}
+                </script>
                 <style>
-                    .copy-button {{
-                        background-color: #4CAF50;
-                        border: none;
-                        color: white;
-                        padding: 10px 20px;
-                        text-align: center;
+                    .modal {{
+                        display: none;
+                        position: fixed;
+                        z-index: 1;
+                        left: 0;
+                        top: 0;
+                        width: 100%;
+                        height: 100%;
+                        overflow: auto;
+                        background-color: rgb(0,0,0);
+                        background-color: rgba(0,0,0,0.4);
+                    }}
+                    .modal-content {{
+                        background-color: #fefefe;
+                        margin: 15% auto;
+                        padding: 20px;
+                        border: 1px solid #888;
+                        width: 80%;
+                    }}
+                    .close {{
+                        color: #aaa;
+                        float: right;
+                        font-size: 28px;
+                        font-weight: bold;
+                    }}
+                    .close:hover, .close:focus {{
+                        color: black;
                         text-decoration: none;
-                        display: inline-block;
-                        font-size: 16px;
-                        margin: 4px 2px;
                         cursor: pointer;
-                        border-radius: 12px;
                     }}
                 </style>
-                <button class="copy-button" onclick="copyToClipboard('template_{i}')">Скопировать шаблон {i + 1}</button>
-                <textarea id="template_{i}" style="display:none;">{wrapped_template}</textarea>
-                <script>
-                function copyToClipboard(id) {{
-                    var copyText = document.getElementById(id);
-                    copyText.style.display = 'block';
-                    copyText.select();
-                    document.execCommand('copy');
-                    copyText.style.display = 'none';
-                    alert('Шаблон скопирован в буфер обмена!');
-                }}
-                </script>
             """
-            components.html(copy_button_html)
+            # Вставка HTML и JavaScript в Streamlit
+            st.components.v1.html(copy_button_html, height=300)
 
-            st.write("************")
 
+# Проверка аутентификации
 if "password_entered" not in st.session_state:
     st.session_state["password_entered"] = False
 
