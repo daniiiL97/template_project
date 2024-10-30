@@ -125,7 +125,6 @@ def main():
     if "current_summary" not in st.session_state:
         st.session_state["current_summary"] = ""
 
-    # Загружаем данные из S3 перед использованием
     df, embeddings = load_data_from_s3()
 
     audio_input = st.experimental_audio_input("Голосовой ввод 🎙️")
@@ -137,7 +136,6 @@ def main():
             st.write(transcription)
             st.session_state["input_phrase"] = transcription
 
-    # Поле для ввода текста и выбор количества шаблонов
     st.session_state["input_phrase"] = st.text_input(
         "Введите текст для поиска релевантных шаблонов:",
         value=st.session_state["input_phrase"],
@@ -145,20 +143,18 @@ def main():
     )
     top_n = st.slider("Выберите количество шаблонов:", min_value=1, max_value=11, step=1)
 
-    # Кнопка для поиска релевантных шаблонов
     if st.button("Найти шаблоны"):
         relevant_templates, scores = find_relevant_templates(st.session_state["input_phrase"], embeddings, df, top_n)
         st.write("Релевантные шаблоны:")
 
         for i, (template, score) in enumerate(zip(relevant_templates, scores)):
             st.write(f"**Шаблон {i + 1}:**")
-            st.write(template)  # Выводим текст шаблона без `textwrap.fill`
+            st.write(template)
             st.write(f"**Схожесть:** {score:.4f}")
 
-            # HTML-кнопка для суммаризации и копирования с использованием JavaScript
             copy_button_html = f"""
-                <button onclick="copyToClipboard('template_{i}')">Скопировать шаблон {i + 1}</button>
-                <button onclick="openModal('modal_{i}')">Суммаризировать шаблон {i + 1}</button>
+                <button onclick="copyToClipboard('template_{i}')" style="background-color: #292c32; color: white; border: none; padding: 10px; cursor: pointer; margin-right: 5px;">Скопировать шаблон {i + 1}</button>
+                <button onclick="openModal('modal_{i}')" style="background-color: #292c32; color: white; border: none; padding: 10px; cursor: pointer;">Суммаризировать шаблон {i + 1}</button>
                 <textarea id="template_{i}" style="display:none;">{template}</textarea>
                 <div id="modal_{i}" class="modal" style="display:none;">
                     <div class="modal-content">
@@ -215,11 +211,8 @@ def main():
                     }}
                 </style>
             """
-            # Вставка HTML и JavaScript в Streamlit
             st.components.v1.html(copy_button_html, height=300)
 
-
-# Проверка аутентификации
 if "password_entered" not in st.session_state:
     st.session_state["password_entered"] = False
 
