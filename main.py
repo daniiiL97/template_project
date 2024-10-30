@@ -128,6 +128,9 @@ def main():
     if "current_summary" not in st.session_state:
         st.session_state["current_summary"] = ""
 
+    # Загружаем данные из S3 перед использованием
+    df, embeddings = load_data_from_s3()
+
     audio_input = st.experimental_audio_input("Голосовой ввод 🎙️")
     if audio_input is not None:
         st.write("Аудио получено. Выполняется транскрибация звука...")
