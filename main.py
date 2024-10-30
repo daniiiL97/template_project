@@ -97,7 +97,7 @@ def find_relevant_templates(input_text, embeddings, df, top_n):
     top_scores = similarities[top_indices]
     return top_templates, top_scores
 
-def summarize_text(text, retries=3, delay=5):
+def summarize_text(text, retries=3, delay=10):
     payload = {"inputs": text, "parameters": {"max_length": 300, "min_length": 100, "do_sample": False}}
     for attempt in range(retries):
         try:
@@ -158,16 +158,16 @@ def main():
             st.write(template)  # Выводим текст шаблона без `textwrap.fill`
             st.write(f"**Схожесть:** {score:.4f}")
 
-            # Кнопка для суммаризации и копирования с использованием JavaScript
+            # HTML-кнопка для суммаризации и копирования с использованием JavaScript
             copy_button_html = f"""
                 <button onclick="copyToClipboard('template_{i}')">Скопировать шаблон {i + 1}</button>
                 <button onclick="openModal('modal_{i}')">Суммаризировать шаблон {i + 1}</button>
-                <textarea id="template_{i}" style="display:none;">{wrapped_template}</textarea>
+                <textarea id="template_{i}" style="display:none;">{template}</textarea>
                 <div id="modal_{i}" class="modal" style="display:none;">
                     <div class="modal-content">
                         <span class="close" onclick="closeModal('modal_{i}')">&times;</span>
                         <p>Суммаризация:</p>
-                        <p>{summarize_text(wrapped_template)}</p>
+                        <p>{summarize_text(template)}</p>
                     </div>
                 </div>
                 <script>
@@ -196,7 +196,6 @@ def main():
                         width: 100%;
                         height: 100%;
                         overflow: auto;
-                        background-color: rgb(0,0,0);
                         background-color: rgba(0,0,0,0.4);
                     }}
                     .modal-content {{
